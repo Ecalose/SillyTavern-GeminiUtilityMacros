@@ -17,9 +17,11 @@ function getSentences(text) {
     // This regex attempts to avoid splitting on abbreviations like Mr. or Mrs.
     // It looks for a period/question mark/exclamation mark followed by whitespace and an uppercase letter,
     // or the end of the string, or a newline.
-    // (Does this regex also handle elipses and other punctuation?)
     const sentences = text.match(/[^.!?\n]+([.!?](?!\s*[a-z])|\n|$)+/g);
-    return sentences ? sentences.map(s => s.trim()).filter(s => s.length > 0) : [];
+    // Trim common markdown characters (*, _, ~) from the start and end of each sentence after splitting
+    return sentences
+        ? sentences.map(s => s.trim().replace(/^[*_~]+/, '').replace(/[*_~]+$/, '').trim()).filter(s => s.length > 0)
+        : [];
 }
 
 /**
@@ -27,9 +29,12 @@ function getSentences(text) {
  * @returns {string} The text of the last user message, or empty string if none found.
  */
 function getLastUserMessageText() {
+    console.log("[GeminiUtilityMacros] getLastUserMessageText called"); // Log entry
     const context = getContext();
+    console.log("[GeminiUtilityMacros] Context:", context ? 'Available' : 'Not Available'); // Log context availability
     // Access chat directly like built-in macros often do
     const chat = context?.chat;
+    console.log("[GeminiUtilityMacros] Chat:", chat ? `Length ${chat.length}` : 'Not available'); // Log chat status
     if (!chat) {
         // console.warn("[GeminiUtilityMacros] Chat not available for macro evaluation.");
         return '';
@@ -39,18 +44,24 @@ function getLastUserMessageText() {
     for (let i = chat.length - 1; i >= 0; i--) {
         const message = chat[i];
         // Ensure message exists and is a user message (not system/scenario etc.)
-        if (message && message.isUser && !message.is_system) {
+        if (message && message.is_user && !message.is_system) { // Changed isUser to is_user
+            console.log(`[GeminiUtilityMacros] Found user message at index ${i}`); // Log found message
+            let textToReturn = '';
             // Check if there are swipes and get the currently displayed swipe text
             if (message.swipes && message.swipes.length > 0 && message.swipe_id !== undefined && message.swipe_id < message.swipes.length) {
                  // Ensure the swipe text exists before returning
-                 return message.swipes[message.swipe_id] || '';
+                 textToReturn = message.swipes[message.swipe_id] || '';
+                 console.log(`[GeminiUtilityMacros] Using swipe text (length ${textToReturn.length})`); // Log swipe text found
             } else {
                 // Return the base message text, ensuring it exists
-                return message.mes || '';
+                textToReturn = message.mes || '';
+                console.log(`[GeminiUtilityMacros] Using base message text (length ${textToReturn.length})`); // Log base text found
             }
+            return textToReturn; // Return the determined text
             // No need for break, return exits the loop and function
         }
     }
+    console.log("[GeminiUtilityMacros] No user message found."); // Log if no message found
     return ''; // No user message found
 }
 
@@ -60,8 +71,12 @@ function getLastUserMessageText() {
  * @returns {string}
  */
 function getFirstSentenceFromText(text) {
+    console.log(`[GeminiUtilityMacros] getFirstSentenceFromText called with text length: ${text?.length || 0}`); // Log input text length
     if (!text) return ''; // Handle empty input directly
     const sentences = getSentences(text);
+    const result = sentences.length > 0 ? sentences[0] : '';
+    console.log(`[GeminiUtilityMacros] First sentence result (length ${result.length})`); // Log result length
+    return result;
     return sentences.length > 0 ? sentences[0] : '';
 }
 
@@ -71,8 +86,12 @@ function getFirstSentenceFromText(text) {
  * @returns {string}
  */
 function getLastSentenceFromText(text) {
+    console.log(`[GeminiUtilityMacros] getLastSentenceFromText called with text length: ${text?.length || 0}`); // Log input text length
     if (!text) return ''; // Handle empty input directly
     const sentences = getSentences(text);
+    const result = sentences.length > 0 ? sentences[sentences.length - 1] : '';
+    console.log(`[GeminiUtilityMacros] Last sentence result (length ${result.length})`); // Log result length
+    return result;
     return sentences.length > 0 ? sentences[sentences.length - 1] : '';
 }
 
