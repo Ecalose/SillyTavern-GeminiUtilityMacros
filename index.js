@@ -25,8 +25,54 @@ function getSentences(text) {
 }
 
 /**
- * Finds the raw text of the last user message, handling swipes.
- * @returns {string} The text of the last user message, or empty string if none found.
+ * Removes OOC blocks like [OOC: ...] or (OOC: ...) from text and trims whitespace.
+ * @param {string} text The input text.
+ * @returns {string} The processed text.
+ */
+function preprocessMessageText(text) {
+    if (!text) return '';
+
+    let processedText = text.trim();
+
+    // --- Handle Edge Cases (Incomplete brackets at absolute start/end) ---
+
+    // Case 1: First line ends with OOC:] or OOC:) but no opener on that line
+    const firstNewlineIndex = processedText.indexOf('\n');
+    const firstLine = firstNewlineIndex === -1 ? processedText : processedText.substring(0, firstNewlineIndex);
+
+    // Check if the first line contains the pattern AND lacks an opening bracket
+    if (/\s*OOC\s*:.*?[\)\]]\s*$/i.test(firstLine) && !/[\[\(]/.test(firstLine)) {
+        // If it's the only line, clear it. Otherwise, remove the first line.
+        processedText = firstNewlineIndex === -1 ? '' : processedText.substring(firstNewlineIndex + 1);
+        processedText = processedText.trim(); // Re-trim after removal
+    }
+
+    // Case 2: Last line starts with [OOC: or (OOC: but no closer on that line
+    // Need to re-check processedText in case the start was removed
+    if (processedText) {
+        const lastNewlineIndex = processedText.lastIndexOf('\n');
+        const lastLine = lastNewlineIndex === -1 ? processedText : processedText.substring(lastNewlineIndex + 1);
+
+        // Check if the last line contains the pattern AND lacks a closing bracket
+        if (/^\s*[\(\[]\s*OOC\s*:/i.test(lastLine) && !/[\)\]]/.test(lastLine)) {
+             // If it's the only line, clear it. Otherwise, remove the last line.
+            processedText = lastNewlineIndex === -1 ? '' : processedText.substring(0, lastNewlineIndex);
+            processedText = processedText.trim(); // Re-trim after removal
+        }
+    }
+
+    // --- Handle Well-Formed Blocks (on their own lines) ---
+    // Use the stricter regex now on the potentially modified text
+    const strictOocRegex = /^\s*[\(\[]\s*OOC\s*:\s*.*?[\)\]]\s*$/gim;
+    processedText = processedText.replace(strictOocRegex, '');
+
+    // Final trim to clean up any whitespace left by replacements
+    return processedText.trim();
+}
+
+/**
+ * Finds the raw text of the last user message, handling swipes, and preprocesses it.
+ * @returns {string} The preprocessed text of the last user message, or empty string if none found.
  */
 function getLastUserMessageText() {
     console.log("[GeminiUtilityMacros] getLastUserMessageText called"); // Log entry
@@ -57,7 +103,9 @@ function getLastUserMessageText() {
                 textToReturn = message.mes || '';
                 console.log(`[GeminiUtilityMacros] Using base message text (length ${textToReturn.length})`); // Log base text found
             }
-            return textToReturn; // Return the determined text
+            const preprocessedText = preprocessMessageText(textToReturn); // Preprocess before returning
+            console.log(`[GeminiUtilityMacros] Preprocessed text length: ${preprocessedText.length}`);
+            return preprocessedText;
             // No need for break, return exits the loop and function
         }
     }
