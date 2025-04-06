@@ -17,7 +17,13 @@ function getSentences(text) {
     // This regex attempts to avoid splitting on abbreviations like Mr. or Mrs.
     // It looks for a period/question mark/exclamation mark followed by whitespace and an uppercase letter,
     // or the end of the string, or a newline.
-    const sentences = text.match(/[^.!?\n]+([.!?](?!\s*[a-z])|\n|$)+/g);
+    // Include optional closing quotes/brackets after the main punctuation
+    // Match sequences ending in punctuation/newline/end-of-string,
+    // but only if that end is followed by whitespace+uppercase, end-of-string, or newline.
+    // This helps avoid splitting mid-sentence punctuation like ellipses.
+    // Match sentence content non-greedily, followed by a terminator group,
+    // ensuring the terminator is followed by whitespace or end-of-string.
+    const sentences = text.match(/(.+?)(?:[.!?](?!\s*[a-z])["')\]]*[*_~]*|\n|$)(?=\s|$)/g);
     // Trim common markdown characters (*, _, ~) from the start and end of each sentence after splitting
     return sentences
         ? sentences.map(s => s.trim().replace(/^[*_~]+/, '').replace(/[*_~]+$/, '').trim()).filter(s => s.length > 0)
