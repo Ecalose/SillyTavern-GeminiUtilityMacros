@@ -118,7 +118,44 @@ function getLastUserMessageText() {
     console.log("[GeminiUtilityMacros] No user message found."); // Log if no message found
     return ''; // No user message found
 }
+function getLastCharMessageText() {
+    console.log("[GeminiUtilityMacros] getLastCharMessageText called"); // Log entry
+    const context = getContext();
+    console.log("[GeminiUtilityMacros] Context:", context ? 'Available' : 'Not Available'); // Log context availability
+    // Access chat directly like built-in macros often do
+    const chat = context?.chat;
+    console.log("[GeminiUtilityMacros] Chat:", chat ? `Length ${chat.length}` : 'Not available'); // Log chat status
+    if (!chat) {
+        // console.warn("[GeminiUtilityMacros] Chat not available for macro evaluation.");
+        return '';
+    }
 
+    // Iterate backwards through the chat history
+    for (let i = chat.length - 1; i >= 0; i--) {
+        const message = chat[i];
+        // Ensure message exists and is a Char message (not system/scenario etc.)
+        if (message && !message.is_user && !message.is_system) { // Changed isUser to is_user
+            console.log(`[GeminiUtilityMacros] Found user message at index ${i}`); // Log found message
+            let textToReturn = '';
+            // Check if there are swipes and get the currently displayed swipe text
+            if (message.swipes && message.swipes.length > 0 && message.swipe_id !== undefined && message.swipe_id < message.swipes.length) {
+                 // Ensure the swipe text exists before returning
+                 textToReturn = message.swipes[message.swipe_id] || '';
+                 console.log(`[GeminiUtilityMacros] Using swipe text (length ${textToReturn.length})`); // Log swipe text found
+            } else {
+                // Return the base message text, ensuring it exists
+                textToReturn = message.mes || '';
+                console.log(`[GeminiUtilityMacros] Using base message text (length ${textToReturn.length})`); // Log base text found
+            }
+            const preprocessedText = preprocessMessageText(textToReturn); // Preprocess before returning
+            console.log(`[GeminiUtilityMacros] Preprocessed text length: ${preprocessedText.length}`);
+            return preprocessedText;
+            // No need for break, return exits the loop and function
+        }
+    }
+    console.log("[GeminiUtilityMacros] No char message found."); // Log if no message found
+    return ''; // No char message found
+}
 /**
  * Gets the first sentence from the provided text.
  * @param {string} text
@@ -166,6 +203,11 @@ MacrosParser.registerMacro(
     'lastsentence',
     () => getLastSentenceFromText(getLastUserMessageText()), // Calculate on demand
     'The last sentence of the last user message.'
+);
+MacrosParser.registerMacro(
+    'lastcharsentence',
+    () => getLastSentenceFromText(getLastCharMessageText()), // Calculate on demand
+    'The last sentence of the last char message.'
 );
 console.log("[GeminiUtilityMacros] Macros registered.");
 
