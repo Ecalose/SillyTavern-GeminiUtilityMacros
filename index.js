@@ -206,7 +206,7 @@ if (typeof MacrosParser === 'undefined') {
     console.log("[GeminiUtilityMacros DEBUG] 'firstsentence' macro registration attempted.");
 
     MacrosParser.registerMacro(
-        'lastsentence',
+        'lastcharline',
         () => {
              // --- ADDED Log & Try/Catch ---
             console.log("[GeminiUtilityMacros DEBUG] Callback for 'lastsentence' INVOKED.");
