@@ -1,5 +1,5 @@
 # SillyTavern Gemini Utility Macros
-
+fork from https://github.com/DAurielS/SillyTavern-GeminiUtilityMacros
 This SillyTavern UI Extension provides two simple macros derived from the user's most recent message.
 
 ## Features
