@@ -10,19 +10,24 @@ import { MacrosParser } from '../../../macros.js';
  * @returns {string[]} An array of sentences.
  */
 function getSentences(text) {
-    // --- ADDED Log ---
-    console.log(`[GeminiUtilityMacros DEBUG] getSentences called with text (first 50 chars): "${text?.substring(0, 50)}..."`);
     if (!text) {
         return [];
     }
-    // ... (rest of getSentences function remains the same)
+    // Match sentences ending with ., !, ?, or newline, handling potential whitespace.
+    // This regex attempts to avoid splitting on abbreviations like Mr. or Mrs.
+    // It looks for a period/question mark/exclamation mark followed by whitespace and an uppercase letter,
+    // or the end of the string, or a newline.
+    // Include optional closing quotes/brackets after the main punctuation
+    // Match sequences ending in punctuation/newline/end-of-string,
+    // but only if that end is followed by whitespace+uppercase, end-of-string, or newline.
+    // This helps avoid splitting mid-sentence punctuation like ellipses.
+    // Match sentence content non-greedily, followed by a terminator group,
+    // ensuring the terminator is followed by whitespace or end-of-string.
     const sentences = text.match(/(.+?)(?:[.!?](?!\s*[a-z])["')\]]*[*_~]*|\n|$)(?=\s|$)/g);
-    const result = sentences
+    // Trim common markdown characters (*, _, ~) from the start and end of each sentence after splitting
+    return sentences
         ? sentences.map(s => s.trim().replace(/^[*_~]+/, '').replace(/[*_~]+$/, '').trim()).filter(s => s.length > 0)
         : [];
-    // --- ADDED Log ---
-    console.log(`[GeminiUtilityMacros DEBUG] getSentences returning ${result.length} sentences.`);
-    return result;
 }
 
 /**
@@ -31,19 +36,44 @@ function getSentences(text) {
  * @returns {string} The processed text.
  */
 function preprocessMessageText(text) {
-    // --- ADDED Log ---
-    console.log(`[GeminiUtilityMacros DEBUG] preprocessMessageText called with text (first 50 chars): "${text?.substring(0, 50)}..."`);
     if (!text) return '';
 
     let processedText = text.trim();
 
-    // ... (rest of preprocessMessageText function remains the same)
+    // --- Handle Edge Cases (Incomplete brackets at absolute start/end) ---
+
+    // Case 1: First line ends with OOC:] or OOC:) but no opener on that line
+    const firstNewlineIndex = processedText.indexOf('\n');
+    const firstLine = firstNewlineIndex === -1 ? processedText : processedText.substring(0, firstNewlineIndex);
+
+    // Check if the first line contains the pattern AND lacks an opening bracket
+    if (/\s*OOC\s*:.*?[\)\]]\s*$/i.test(firstLine) && !/[\[\(]/.test(firstLine)) {
+        // If it's the only line, clear it. Otherwise, remove the first line.
+        processedText = firstNewlineIndex === -1 ? '' : processedText.substring(firstNewlineIndex + 1);
+        processedText = processedText.trim(); // Re-trim after removal
+    }
+
+    // Case 2: Last line starts with [OOC: or (OOC: but no closer on that line
+    // Need to re-check processedText in case the start was removed
+    if (processedText) {
+        const lastNewlineIndex = processedText.lastIndexOf('\n');
+        const lastLine = lastNewlineIndex === -1 ? processedText : processedText.substring(lastNewlineIndex + 1);
+
+        // Check if the last line contains the pattern AND lacks a closing bracket
+        if (/^\s*[\(\[]\s*OOC\s*:/i.test(lastLine) && !/[\)\]]/.test(lastLine)) {
+             // If it's the only line, clear it. Otherwise, remove the last line.
+            processedText = lastNewlineIndex === -1 ? '' : processedText.substring(0, lastNewlineIndex);
+            processedText = processedText.trim(); // Re-trim after removal
+        }
+    }
+
+    // --- Handle Well-Formed Blocks (on their own lines) ---
+    // Use the stricter regex now on the potentially modified text
+    const strictOocRegex = /^\s*[\(\[]\s*OOC\s*:\s*.*?[\)\]]\s*$/gim;
+    processedText = processedText.replace(strictOocRegex, '');
 
     // Final trim to clean up any whitespace left by replacements
-    processedText = processedText.trim();
-    // --- ADDED Log ---
-    console.log(`[GeminiUtilityMacros DEBUG] preprocessMessageText returning text (first 50 chars): "${processedText?.substring(0, 50)}..."`);
-    return processedText;
+    return processedText.trim();
 }
 
 /**
@@ -54,10 +84,7 @@ function getLastUserMessageText() {
     console.log("[GeminiUtilityMacros] getLastUserMessageText called"); // Log entry
     const context = getContext();
     console.log("[GeminiUtilityMacros] Context:", context ? 'Available' : 'Not Available'); // Log context availability
-    if (!context) {
-        console.warn("[GeminiUtilityMacros] Context is NULL or undefined in getLastUserMessageText.");
-        return ''; // Early exit if context is missing
-    }
+    // Access chat directly like built-in macros often do
     const chat = context?.chat;
     console.log("[GeminiUtilityMacros] Chat:", chat ? `Length ${chat.length}` : 'Not available'); // Log chat status
     if (!chat) {
@@ -82,10 +109,8 @@ function getLastUserMessageText() {
                 textToReturn = message.mes || '';
                 console.log(`[GeminiUtilityMacros] Using base message text (length ${textToReturn.length})`); // Log base text found
             }
-            // --- MODIFIED Log ---
-            console.log(`[GeminiUtilityMacros] Raw user text before preprocessing (first 50 chars): "${textToReturn?.substring(0, 50)}..."`);
             const preprocessedText = preprocessMessageText(textToReturn); // Preprocess before returning
-            console.log(`[GeminiUtilityMacros] Preprocessed user text length: ${preprocessedText.length}`);
+            console.log(`[GeminiUtilityMacros] Preprocessed text length: ${preprocessedText.length}`);
             return preprocessedText;
             // No need for break, return exits the loop and function
         }
@@ -97,10 +122,6 @@ function getLastCharMessageText() {
     console.log("[GeminiUtilityMacros] getLastCharMessageText called"); // Log entry
     const context = getContext();
     console.log("[GeminiUtilityMacros] Context:", context ? 'Available' : 'Not Available'); // Log context availability
-     if (!context) {
-        console.warn("[GeminiUtilityMacros] Context is NULL or undefined in getLastCharMessageText.");
-        return ''; // Early exit if context is missing
-    }
     // Access chat directly like built-in macros often do
     const chat = context?.chat;
     console.log("[GeminiUtilityMacros] Chat:", chat ? `Length ${chat.length}` : 'Not available'); // Log chat status
@@ -113,26 +134,21 @@ function getLastCharMessageText() {
     for (let i = chat.length - 1; i >= 0; i--) {
         const message = chat[i];
         // Ensure message exists and is a Char message (not system/scenario etc.)
-        // --- ADDED Log ---
-        console.log(`[GeminiUtilityMacros DEBUG] Checking message at index ${i}: is_user=${message?.is_user}, is_system=${message?.is_system}`);
-        if (message && !message.is_user && !message.is_system) { // Find non-user, non-system message
-            // --- MODIFIED Log ---
-            console.log(`[GeminiUtilityMacros] Found char message at index ${i}`); // Log found message
+        if (message && !message.is_user && !message.is_system) { // Changed isUser to is_user
+            console.log(`[GeminiUtilityMacros] Found user message at index ${i}`); // Log found message
             let textToReturn = '';
             // Check if there are swipes and get the currently displayed swipe text
             if (message.swipes && message.swipes.length > 0 && message.swipe_id !== undefined && message.swipe_id < message.swipes.length) {
                  // Ensure the swipe text exists before returning
                  textToReturn = message.swipes[message.swipe_id] || '';
-                 console.log(`[GeminiUtilityMacros] Using char swipe text (length ${textToReturn.length})`); // Log swipe text found
+                 console.log(`[GeminiUtilityMacros] Using swipe text (length ${textToReturn.length})`); // Log swipe text found
             } else {
                 // Return the base message text, ensuring it exists
                 textToReturn = message.mes || '';
-                console.log(`[GeminiUtilityMacros] Using char base message text (length ${textToReturn.length})`); // Log base text found
+                console.log(`[GeminiUtilityMacros] Using base message text (length ${textToReturn.length})`); // Log base text found
             }
-             // --- MODIFIED Log ---
-            console.log(`[GeminiUtilityMacros] Raw char text before preprocessing (first 50 chars): "${textToReturn?.substring(0, 50)}..."`);
             const preprocessedText = preprocessMessageText(textToReturn); // Preprocess before returning
-            console.log(`[GeminiUtilityMacros] Preprocessed char text length: ${preprocessedText.length}`);
+            console.log(`[GeminiUtilityMacros] Preprocessed text length: ${preprocessedText.length}`);
             return preprocessedText;
             // No need for break, return exits the loop and function
         }
@@ -152,7 +168,7 @@ function getFirstSentenceFromText(text) {
     const result = sentences.length > 0 ? sentences[0] : '';
     console.log(`[GeminiUtilityMacros] First sentence result (length ${result.length})`); // Log result length
     return result;
-    // return sentences.length > 0 ? sentences[0] : ''; // Removed duplicate return
+    return sentences.length > 0 ? sentences[0] : '';
 }
 
 /**
@@ -167,7 +183,7 @@ function getLastSentenceFromText(text) {
     const result = sentences.length > 0 ? sentences[sentences.length - 1] : '';
     console.log(`[GeminiUtilityMacros] Last sentence result (length ${result.length})`); // Log result length
     return result;
-    // return sentences.length > 0 ? sentences[sentences.length - 1] : ''; // Removed duplicate return
+    return sentences.length > 0 ? sentences[sentences.length - 1] : '';
 }
 
 // --- Initialization ---
@@ -178,78 +194,22 @@ console.log("[GeminiUtilityMacros] Initializing...");
 // --- Macro Registration ---
 // Register the macros using the imported parser.
 // The value is a function that returns the current state of our global variables.
+MacrosParser.registerMacro(
+    'firstsentence',
+    () => getFirstSentenceFromText(getLastUserMessageText()), // Calculate on demand
+    'The first sentence of the last user message.'
+);
+MacrosParser.registerMacro(
+    'lastsentence',
+    () => getLastSentenceFromText(getLastUserMessageText()), // Calculate on demand
+    'The last sentence of the last user message.'
+);
+MacrosParser.registerMacro(
+    'lastcharline',
+    () => getLastSentenceFromText(getLastCharMessageText()), // Calculate on demand
+    'The last sentence of the last char message.'
+);
+console.log("[GeminiUtilityMacros] Macros registered.");
 
-// --- DEBUG: Check if MacrosParser exists ---
-if (typeof MacrosParser === 'undefined') {
-    console.error("[GeminiUtilityMacros FATAL] MacrosParser is undefined! Macros cannot be registered.");
-} else {
-    console.log("[GeminiUtilityMacros DEBUG] MacrosParser seems available. Proceeding with registration.");
-
-    MacrosParser.registerMacro(
-        'firstsentence',
-        () => {
-            // --- ADDED Log & Try/Catch ---
-            console.log("[GeminiUtilityMacros DEBUG] Callback for 'firstsentence' INVOKED.");
-            try {
-                const userText = getLastUserMessageText();
-                const result = getFirstSentenceFromText(userText);
-                console.log(`[GeminiUtilityMacros DEBUG] 'firstsentence' callback returning: "${result}"`);
-                return result;
-            } catch (error) {
-                console.error("[GeminiUtilityMacros ERROR] Error in 'firstsentence' callback:", error);
-                return "[Error processing firstsentence]"; // Return an error message instead of failing silently
-            }
-        },
-        'The first sentence of the last user message.'
-    );
-    // --- ADDED Log ---
-    console.log("[GeminiUtilityMacros DEBUG] 'firstsentence' macro registration attempted.");
-
-    MacrosParser.registerMacro(
-        'lastcharline',
-        () => {
-             // --- ADDED Log & Try/Catch ---
-            console.log("[GeminiUtilityMacros DEBUG] Callback for 'lastsentence' INVOKED.");
-            try {
-                const userText = getLastUserMessageText();
-                const result = getLastSentenceFromText(userText);
-                console.log(`[GeminiUtilityMacros DEBUG] 'lastsentence' callback returning: "${result}"`);
-                return result;
-            } catch (error) {
-                console.error("[GeminiUtilityMacros ERROR] Error in 'lastsentence' callback:", error);
-                return "[Error processing lastsentence]";
-            }
-        },
-        'The last sentence of the last user message.'
-    );
-     // --- ADDED Log ---
-    console.log("[GeminiUtilityMacros DEBUG] 'lastsentence' macro registration attempted.");
-
-    MacrosParser.registerMacro(
-        'lastcharsentence',
-        () => {
-            // --- ADDED Log & Try/Catch ---
-            console.log("[GeminiUtilityMacros DEBUG] Callback for 'lastcharsentence' INVOKED."); // <<< MOST IMPORTANT LOG
-            try {
-                const charText = getLastCharMessageText();
-                // --- ADDED Log ---
-                console.log(`[GeminiUtilityMacros DEBUG] 'lastcharsentence' callback received charText (length ${charText?.length}): "${charText?.substring(0, 100)}..."`);
-                const result = getLastSentenceFromText(charText);
-                // --- ADDED Log ---
-                console.log(`[GeminiUtilityMacros DEBUG] 'lastcharsentence' callback returning final result: "${result}"`);
-                return result;
-            } catch (error) {
-                console.error("[GeminiUtilityMacros ERROR] Error in 'lastcharsentence' callback:", error);
-                return "[Error processing lastcharsentence]"; // Return an error message
-            }
-        },
-        'The last sentence of the last char message.'
-    );
-    // --- ADDED Log ---
-    console.log("[GeminiUtilityMacros DEBUG] 'lastcharsentence' macro registration attempted."); // <<< CONFIRM REGISTRATION
-
-    console.log("[GeminiUtilityMacros] Macros registered.");
-
-} // End of check for MacrosParser
 
 console.log("[GeminiUtilityMacros] Initialization complete.");
